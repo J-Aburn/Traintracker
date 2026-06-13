@@ -1,6 +1,4 @@
-Python 3.14.6 (v3.14.6:c63aec69bd5, Jun 10 2026, 08:07:54) [Clang 21.0.0 (clang-2100.1.1.101)] on darwin
-Enter "help" below or click "Help" above for more information.
->>> import streamlit as st
+import streamlit as st
 ... import requests
 ... 
 ... # App setup optimized for mobile screens
