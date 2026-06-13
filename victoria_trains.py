@@ -43,16 +43,20 @@ st.write("---")
 
 # 5. Find Trains Button
 if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=True):
-    # Added 'timeWindow=240' to break the 2-hour server wall and demand a 4-hour schedule grid
-    URL = f"https://huxley2.azurewebsites.net/departures/{origin_code}/75?accessToken={ACCESS_TOKEN}&expand=true&timeWindow=240"
+    # Fetch two valid 2-hour windows (0 to 120 mins, and 120 to 240 mins) to achieve the full 4 hours safely
+    URL_now = f"https://huxley2.azurewebsites.net/departures/{origin_code}/40?accessToken={ACCESS_TOKEN}&expand=true&timeWindow=120"
+    URL_later = f"https://huxley2.azurewebsites.net/departures/{origin_code}/40?accessToken={ACCESS_TOKEN}&expand=true&timeOffset=120&timeWindow=120"
     
     try:
         with st.spinner("Scanning 4-hour live timetable..."):
-            response = requests.get(URL)
+            res_now = requests.get(URL_now)
+            res_later = requests.get(URL_later)
             
-        if response.status_code == 200:
-            data = response.json()
-            all_services = data.get('trainServices', []) or []
+        if res_now.status_code == 200 and res_later.status_code == 200:
+            # Gather services from both valid time windows and combine them into one master list
+            all_services = res_now.json().get('trainServices', []) or []
+            later_services = res_later.json().get('trainServices', []) or []
+            all_services.extend(later_services)
             
             filtered_trains = []
             
@@ -81,10 +85,19 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
             else:
                 st.success(f"Found {len(filtered_trains)} upcoming services over the next 4 hours:")
                 
+                # Deduplicate records where the two query ranges overlap
+                seen_services = set()
+                
                 for train in filtered_trains:
                     std = train.get('std', 'Unknown')   # Scheduled departure
                     etd = train.get('etd', '')          # Live estimated status
                     platform = train.get('platform', 'TBC')
+                    
+                    # Create a unique identifier for deduplication
+                    service_uid = f"{std}-{platform}"
+                    if service_uid in seen_services:
+                        continue
+                    seen_services.add(service_uid)
                     
                     dest_display = train.get('destination', [{}])[0].get('locationName', 'Victoria')
                     
@@ -101,10 +114,8 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     st.markdown(f"**Status:** {status} &nbsp;|&nbsp; **Platform:** {platform}")
                     st.divider()
                     
-        elif response.status_code == 401:
-            st.error("🔒 Unauthorized! Token check failed.")
         else:
-            st.error(f"⚠️ Error fetching data from rail proxy: HTTP {response.status_code}")
+            st.error(f"⚠️ Error fetching data from rail proxy: HTTP {res_now.status_code} / {res_later.status_code}")
             
     except Exception as e:
         st.error(f"❌ Failed to connect to the network: {e}")
