@@ -31,14 +31,13 @@ if st.session_state.direction == "TO_LONDON":
     st.caption(f"Showing the next 10 trains from **{sussex_name}** to **London Victoria**")
     
     # API URL: From Sussex TO Victoria
-    URL = f"https://huxley2.azurewebsites.net/departures/{sussex_code}/to/VIC/10?accessToken={ACCESS_TOKEN}&expand=true"
+    URL = f"https://huxley2.azurewebsites.net/departures/{sussex_code}/10?accessToken={ACCESS_TOKEN}&expand=true"
 else:
     st.info(f"## 🏡 Heading Home!")
     st.caption(f"Showing the next 10 trains from **London Victoria** to **{sussex_name}**")
     
     # API URL: From Victoria TO Sussex
-    URL = f"https://huxley2.azurewebsites.net/departures/VIC/to/{sussex_code}/10?accessToken={ACCESS_TOKEN}&expand=true"
-
+    URL = f"https://huxley2.azurewebsites.net/departures/VIC/10?accessToken={ACCESS_TOKEN}&expand=true"
 st.write("---")
 
 # Main action button to pull the board
