@@ -18,7 +18,7 @@ station_code = "PLG" if "Polegate" in station else "BRK"
 
 # A big, wide button that is easy to tap on a phone screen
 if st.button("🚀 Find Next Trains to Victoria", type="primary", use_container_width=True):
-    # Fetching 20 departures ensures we look deep enough into the next 2+ hours
+    # Fetching 20 departures ensures we look deep enough into the next 4+ hours
     URL = f"https://huxley2.azurewebsites.net/departures/{station_code}/20?accessToken={ACCESS_TOKEN}&expand=true"
     
     try:
