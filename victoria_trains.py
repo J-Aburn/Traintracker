@@ -76,7 +76,8 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                         status = f"🟠 Delayed ({etd})"
                     
                     # High-contrast mobile typography with platform standing out clearly
-                    st.markdown(f"## 🕒 **{std}** &nbsp;&nbsp;&nbsp;&nbsp; 🚪 **{platform}**")
+                    st.markdown(f"## 🕒 **{std}**")
+                    st.markdown(f"🚪 *{platform}*")
                     if st.session_state.direction == "FROM_LONDON":
                         st.markdown(f"*Final Destination: {dest_name}*")
                     st.markdown(f"**Status:** {status}")
