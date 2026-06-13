@@ -10,7 +10,7 @@ st.write("---")
 
 # --- CONFIGURATION ---
 # Paste your free National Rail token inside the quotes below
-ACCESS_TOKEN = "YOUR_API_TOKEN_HERE" 
+ACCESS_TOKEN = "053bbfb6-02fd-4701-9d5d-089132af2ec5" 
 
 # Clean dropdown selector for your origin station
 station = st.selectbox("Select Departure Station:", ["Polegate (PLG)", "Berwick (BRK)"])
