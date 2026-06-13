@@ -18,16 +18,20 @@ station_code = "PLG" if "Polegate" in station else "BRK"
 
 # A big, wide button that is easy to tap on a phone screen
 if st.button("🚀 Find Next Trains to Victoria", type="primary", use_container_width=True):
-    # Fetching 20 departures ensures we look deep enough into the next 4+ hours
-    URL = f"https://huxley2.azurewebsites.net/departures/{station_code}/20?accessToken={ACCESS_TOKEN}&expand=true"
+    # We fetch two separate 2-hour blocks (up to 40 trains each) to cover the full 4 hours
+    URL_now = f"https://huxley2.azurewebsites.net/departures/{station_code}/40?accessToken={ACCESS_TOKEN}&expand=true"
+    URL_later = f"https://huxley2.azurewebsites.net/departures/{station_code}/40?accessToken={ACCESS_TOKEN}&expand=true&timeOffset=120"
     
     try:
-        with st.spinner("Scanning live timetables..."):
-            response = requests.get(URL)
+        with st.spinner("Scanning 4-hour live timetable..."):
+            res_now = requests.get(URL_now)
+            res_later = requests.get(URL_later)
             
-        if response.status_code == 200:
-            data = response.json()
-            all_services = data.get('trainServices', [])
+        if res_now.status_code == 200 and res_later.status_code == 200:
+            # Gather services from both time windows and combine them into one list
+            all_services = res_now.json().get('trainServices', []) or []
+            later_services = res_later.json().get('trainServices', []) or []
+            all_services.extend(later_services)
             
             # Filter the timetable to find ONLY London Victoria trains
             vic_trains = []
