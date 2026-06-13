@@ -4,22 +4,48 @@ import requests
 # App setup optimized for mobile screens
 st.set_page_config(page_title="Victoria Commuter", page_icon="🚆", layout="centered")
 
-st.title("🚆 London Victoria Board")
-st.write("One-tap live train times from Polegate or Berwick.")
+st.title("🚆 Victoria Commuter Board")
+st.write("One-tap live train times between Sussex and London Victoria.")
 st.write("---")
 
 # --- CONFIGURATION ---
-# Paste your free National Rail token inside the quotes below
 ACCESS_TOKEN = "053bbfb6-02fd-4701-9d5d-089132af2ec5" 
 
-# Clean dropdown selector for your origin station
-station = st.selectbox("Select Departure Station:", ["Polegate (PLG)", "Berwick (BRK)"])
-station_code = "PLG" if "Polegate" in station else "BRK"
+# 1. Choose your Sussex Station
+station = st.selectbox("Select Sussex Station:", ["Polegate (PLG)", "Berwick (BRK)"])
+sussex_code = "PLG" if "Polegate" in station else "BRK"
+sussex_name = "Polegate" if sussex_code == "PLG" else "Berwick"
 
-# A big, wide button that is easy to tap on a phone screen
-if st.button("🚀 Find Next Trains to Victoria", type="primary", use_container_width=True):
-    # Requesting 75 services pulls the maximum depth available, covering your extended window
-    URL = f"https://huxley2.azurewebsites.net/departures/{station_code}/75?accessToken={ACCESS_TOKEN}&expand=true"
+# 2. Track the direction state using Streamlit's memory (session_state)
+if "direction" not in st.session_state:
+    st.session_state.direction = "TO_LONDON"
+
+# 3. The Swap Direction Button 🔁
+# When tapped, this toggles the direction and reloads the page instantly
+if st.button("🔁 Swap Direction", use_container_width=True):
+    if st.session_state.direction == "TO_LONDON":
+        st.session_state.direction = "FROM_LONDON"
+    else:
+        st.session_state.direction = "TO_LONDON"
+
+# 4. Set the origin, destination, and filter logic based on direction
+if st.session_state.direction == "TO_LONDON":
+    origin_code = sussex_code
+    filter_crs = "VIC"
+    filter_name = "London Victoria"
+    st.info(f"👉 Current Route: **{sussex_name}** ➔ **London Victoria**")
+else:
+    origin_code = "VIC"
+    filter_crs = sussex_code
+    filter_name = sussex_name
+    st.info(f"👉 Current Route: **London Victoria** ➔ **{sussex_name}**")
+
+st.write("---")
+
+# 5. Find Trains Button
+if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=True):
+    # Requesting 75 services pulls maximum timetable depth
+    URL = f"https://huxley2.azurewebsites.net/departures/{origin_code}/75?accessToken={ACCESS_TOKEN}&expand=true"
     
     try:
         with st.spinner("Scanning extended live timetable..."):
@@ -29,26 +55,44 @@ if st.button("🚀 Find Next Trains to Victoria", type="primary", use_container_
             data = response.json()
             all_services = data.get('trainServices', []) or []
             
-            # Filter the timetable to find ONLY London Victoria trains
-            vic_trains = []
+            filtered_trains = []
+            
+            # Filter logic changes depending on direction
             for train in all_services:
+                # Target check (where the train terminates)
                 destination_info = train.get('destination', [{}])[0]
                 dest_crs = destination_info.get('crs', '')
                 dest_name = destination_info.get('locationName', '')
                 
-                if dest_crs == "VIC" or "Victoria" in dest_name:
-                    vic_trains.append(train)
+                # If traveling FROM London, we also check intermediate calling points 
+                # in case the train terminates further down the coast (like Ore or Hastings)
+                is_match = False
+                if dest_crs == filter_crs or filter_name in dest_name:
+                    is_match = True
+                elif st.session_state.direction == "FROM_LONDON":
+                    # Scan through the stops along the route
+                    subsequent_locations = train.get('subsequentCallingPoints', [{}])
+                    if subsequent_locations:
+                        calling_points = subsequent_locations[0].get('callingPoint', [])
+                        if any(cp.get('crs') == filter_crs for cp in calling_points):
+                            is_match = True
+                            
+                if is_match:
+                    filtered_trains.append(train)
             
             # Display results
-            if not vic_trains:
-                st.warning("⏱️ No trains to London Victoria found in the current schedule window.")
+            if not filtered_trains:
+                st.warning(f"⏱️ No matching trains found in the current schedule window.")
             else:
-                st.success(f"Found {len(vic_trains)} upcoming services:")
+                st.success(f"Found {len(filtered_trains)} upcoming services:")
                 
-                for train in vic_trains:
+                for train in filtered_trains:
                     std = train.get('std', 'Unknown')   # Scheduled departure
                     etd = train.get('etd', '')          # Live estimated status
                     platform = train.get('platform', 'TBC')
+                    
+                    # If heading home, dynamically show the destination on the card
+                    dest_display = train.get('destination', [{}])[0].get('locationName', 'Victoria')
                     
                     # Color-coded live status definitions
                     if etd == "On time":
@@ -58,13 +102,15 @@ if st.button("🚀 Find Next Trains to Victoria", type="primary", use_container_
                     else:
                         status = f"🟠 Delayed ({etd})"
                     
-                    # Clean mobile-friendly layouts
+                    # High-contrast mobile typography
                     st.markdown(f"## 🕒 **{std}**")
+                    if st.session_state.direction == "FROM_LONDON":
+                        st.markdown(f"*Heading towards: {dest_display}*")
                     st.markdown(f"**Status:** {status} &nbsp;|&nbsp; **Platform:** {platform}")
                     st.divider()
                     
         elif response.status_code == 401:
-            st.error("🔒 Unauthorized! Make sure your ACCESS_TOKEN is pasted correctly inside the script.")
+            st.error("🔒 Unauthorized! Make sure your ACCESS_TOKEN is valid.")
         else:
             st.error(f"⚠️ Error fetching data from rail proxy: HTTP {response.status_code}")
             
