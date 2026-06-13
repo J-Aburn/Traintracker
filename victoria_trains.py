@@ -43,20 +43,16 @@ st.write("---")
 
 # 5. Find Trains Button
 if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=True):
-    # Fetch two valid 2-hour windows (0 to 120 mins, and 120 to 240 mins) to achieve the full 4 hours safely
-    URL_now = f"https://huxley2.azurewebsites.net/departures/{origin_code}/40?accessToken={ACCESS_TOKEN}&expand=true&timeWindow=120"
-    URL_later = f"https://huxley2.azurewebsites.net/departures/{origin_code}/40?accessToken={ACCESS_TOKEN}&expand=true&timeOffset=120&timeWindow=120"
+    # Requesting the next 15 scheduled services natively fills out your timeline safely
+    URL = f"https://huxley2.azurewebsites.net/departures/{origin_code}/15?accessToken={ACCESS_TOKEN}&expand=true"
     
     try:
-        with st.spinner("Scanning 4-hour live timetable..."):
-            res_now = requests.get(URL_now)
-            res_later = requests.get(URL_later)
+        with st.spinner("Scanning live timetable..."):
+            response = requests.get(URL)
             
-        if res_now.status_code == 200 and res_later.status_code == 200:
-            # Gather services from both valid time windows and combine them into one master list
-            all_services = res_now.json().get('trainServices', []) or []
-            later_services = res_later.json().get('trainServices', []) or []
-            all_services.extend(later_services)
+        if response.status_code == 200:
+            data = response.json()
+            all_services = data.get('trainServices', []) or []
             
             filtered_trains = []
             
@@ -70,6 +66,7 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                 if dest_crs == filter_crs or filter_name in dest_name:
                     is_match = True
                 elif st.session_state.direction == "FROM_LONDON":
+                    # Scan intermediate calling points for trains terminating further down the line (e.g. Ore/Hastings)
                     subsequent_locations = train.get('subsequentCallingPoints', [{}])
                     if subsequent_locations:
                         calling_points = subsequent_locations[0].get('callingPoint', [])
@@ -81,23 +78,14 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
             
             # Display results
             if not filtered_trains:
-                st.warning(f"⏱️ No matching trains found in the 4-hour schedule window.")
+                st.warning(f"⏱️ No matching trains found in the current timetable window.")
             else:
-                st.success(f"Found {len(filtered_trains)} upcoming services over the next 4 hours:")
-                
-                # Deduplicate records where the two query ranges overlap
-                seen_services = set()
+                st.success(f"Found {len(filtered_trains)} upcoming services:")
                 
                 for train in filtered_trains:
                     std = train.get('std', 'Unknown')   # Scheduled departure
                     etd = train.get('etd', '')          # Live estimated status
                     platform = train.get('platform', 'TBC')
-                    
-                    # Create a unique identifier for deduplication
-                    service_uid = f"{std}-{platform}"
-                    if service_uid in seen_services:
-                        continue
-                    seen_services.add(service_uid)
                     
                     dest_display = train.get('destination', [{}])[0].get('locationName', 'Victoria')
                     
@@ -114,8 +102,10 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     st.markdown(f"**Status:** {status} &nbsp;|&nbsp; **Platform:** {platform}")
                     st.divider()
                     
+        elif response.status_code == 401:
+            st.error("🔒 Unauthorized! Token check failed.")
         else:
-            st.error(f"⚠️ Error fetching data from rail proxy: HTTP {res_now.status_code} / {res_later.status_code}")
+            st.error(f"⚠️ Error fetching data from rail proxy: HTTP {response.status_code}")
             
     except Exception as e:
         st.error(f"❌ Failed to connect to the network: {e}")
