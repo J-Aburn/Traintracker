@@ -25,19 +25,18 @@ if st.button("🔁 Swap Direction", use_container_width=True):
 
 st.write("---")
 
-# Dynamically set up our banners, titles, and API routing based on the direction state
+# Dynamically set up our banners and API routing based on the direction state
 if st.session_state.direction == "TO_LONDON":
     st.success("## 🌆 Up to London!")
-    st.caption(f"Showing the next 10 trains from **{sussex_name}** to **London Victoria**")
-    
-    # API URL: From Sussex TO Victoria
-    URL = f"https://huxley2.azurewebsites.net/departures/{sussex_code}/10?accessToken={ACCESS_TOKEN}&expand=true"
+    st.caption(f"Showing upcoming trains from **{sussex_name}**")
+    # Pulls departures from your home station
+    URL = f"https://huxley2.azurewebsites.net/departures/{sussex_code}/15?accessToken={ACCESS_TOKEN}&expand=true"
 else:
     st.info(f"## 🏡 Heading Home!")
-    st.caption(f"Showing the next 10 trains from **London Victoria** to **{sussex_name}**")
-    
-    # API URL: From Victoria TO Sussex
-    URL = f"https://huxley2.azurewebsites.net/departures/VIC/10?accessToken={ACCESS_TOKEN}&expand=true"
+    st.caption(f"Showing trains from **London Victoria** that stop at **{sussex_name}**")
+    # Pulls a deeper pool of departures from Victoria so we can scan their stops
+    URL = f"https://huxley2.azurewebsites.net/departures/VIC/25?accessToken={ACCESS_TOKEN}&expand=true"
+
 st.write("---")
 
 # Main action button to pull the board
