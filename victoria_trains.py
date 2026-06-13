@@ -4,10 +4,6 @@ import requests
 # App setup optimized for mobile screens
 st.set_page_config(page_title="Victoria Commuter", page_icon="🚆", layout="centered")
 
-st.title("🚆 Sussex ⇄ Victoria Live Board")
-st.write("Real-time direct timetables via National Rail.")
-st.write("---")
-
 # --- CONFIGURATION ---
 ACCESS_TOKEN = "053bbfb6-02fd-4701-9d5d-089132af2ec5" 
 
@@ -16,70 +12,77 @@ station = st.selectbox("Select Sussex Station:", ["Polegate (PLG)", "Berwick (BR
 sussex_code = "PLG" if "Polegate" in station else "BRK"
 sussex_name = "Polegate" if sussex_code == "PLG" else "Berwick"
 
-# Layout button
-if st.button("🚀 Fetch Live Boards", type="primary", use_container_width=True):
+# Track the direction state using Streamlit's memory
+if "direction" not in st.session_state:
+    st.session_state.direction = "TO_LONDON"
+
+# Big full-width button to toggle directions easily on a phone
+if st.button("🔁 Swap Direction", use_container_width=True):
+    if st.session_state.direction == "TO_LONDON":
+        st.session_state.direction = "FROM_LONDON"
+    else:
+        st.session_state.direction = "TO_LONDON"
+
+st.write("---")
+
+# Dynamically set up our banners, titles, and API routing based on the direction state
+if st.session_state.direction == "TO_LONDON":
+    st.success("## 🌆 Up to London!")
+    st.caption(f"Showing the next 10 trains from **{sussex_name}** to **London Victoria**")
     
-    # We explicitly route via Huxley's specialized /to/ and /from/ endpoint structure 
-    # to extract deep service queues directly from National Rail
-    URL_to_london = f"https://huxley2.azurewebsites.net/departures/{sussex_code}/to/VIC/10?accessToken={ACCESS_TOKEN}&expand=true"
-    URL_from_london = f"https://huxley2.azurewebsites.net/departures/VIC/to/{sussex_code}/10?accessToken={ACCESS_TOKEN}&expand=true"
+    # API URL: From Sussex TO Victoria
+    URL = f"https://huxley2.azurewebsites.net/departures/{sussex_code}/to/VIC/10?accessToken={ACCESS_TOKEN}&expand=true"
+else:
+    st.info(f"## 🏡 Heading Home!")
+    st.caption(f"Showing the next 10 trains from **London Victoria** to **{sussex_name}**")
     
+    # API URL: From Victoria TO Sussex
+    URL = f"https://huxley2.azurewebsites.net/departures/VIC/to/{sussex_code}/10?accessToken={ACCESS_TOKEN}&expand=true"
+
+st.write("---")
+
+# Main action button to pull the board
+if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=True):
     try:
-        with st.spinner("Fetching active timetables..."):
-            res_to = requests.get(URL_to_london)
-            res_from = requests.get(URL_from_london)
+        with st.spinner("Loading live National Rail data..."):
+            response = requests.get(URL)
             
-        if res_to.status_code == 200 and res_from.status_code == 200:
-            trains_to = res_to.json().get('trainServices', []) or []
-            trains_from = res_from.json().get('trainServices', []) or []
+        if response.status_code == 200:
+            data = response.json()
+            train_services = data.get('trainServices', []) or []
             
-            # Create two clear columns on the mobile layout
-            col1, col2 = st.columns(2)
-            
-            # --- COLUMN 1: TO LONDON VICTORIA ---
-            with col1:
-                st.subheader(f"🌆 To Victoria")
-                st.caption(f"From {sussex_name}")
-                st.write("---")
+            if not train_services:
+                st.warning("⏱️ No matching services found in the current timetable grid.")
+            else:
+                st.write(f"### Next 10 Available Services:")
                 
-                if not trains_to:
-                    st.write("⏱️ No services tracked.")
-                else:
-                    for train in trains_to[:10]:
-                        std = train.get('std', 'Unknown')
-                        etd = train.get('etd', '')
-                        plat = train.get('platform', '-')
-                        
-                        status = "🟢 On time" if etd == "On time" else ("🔴 Cancelled" if etd == "Cancelled" else f"🟠 {etd}")
-                        
-                        st.markdown(f"### **{std}**")
-                        st.markdown(f"Plat {plat} | {status}")
-                        st.write("---")
-                        
-            # --- COLUMN 2: FROM LONDON VICTORIA ---
-            with col2:
-                st.subheader(f"🏡 To {sussex_name}")
-                st.caption("From Victoria")
-                st.write("---")
-                
-                if not trains_from:
-                    st.write("⏱️ No services tracked.")
-                else:
-                    for train in trains_from[:10]:
-                        std = train.get('std', 'Unknown')
-                        etd = train.get('etd', '')
-                        plat = train.get('platform', '-')
-                        dest = train.get('destination', [{}])[0].get('locationName', 'Coast')
-                        
-                        status = "🟢 On time" if etd == "On time" else ("🔴 Cancelled" if etd == "Cancelled" else f"🟠 {etd}")
-                        
-                        st.markdown(f"### **{std}**")
-                        st.markdown(f"*{dest}*")
-                        st.markdown(f"Plat {plat} | {status}")
-                        st.write("---")
-                        
+                for train in train_services:
+                    std = train.get('std', 'Unknown')   # Scheduled departure time
+                    etd = train.get('etd', '')          # Live status estimate
+                    platform = train.get('platform', '-')
+                    
+                    # Get the final station destination name
+                    dest_name = train.get('destination', [{}])[0].get('locationName', 'Victoria')
+                    
+                    # Color-code the live delays or cancellations
+                    if etd == "On time":
+                        status = "🟢 On time"
+                    elif etd == "Cancelled":
+                        status = "🔴 CANCELLED"
+                    else:
+                        status = f"🟠 Delayed ({etd})"
+                    
+                    # Clean mobile typography layout
+                    st.markdown(f"## 🕒 **{std}**")
+                    if st.session_state.direction == "FROM_LONDON":
+                        st.markdown(f"*Final Destination: {dest_name}*")
+                    st.markdown(f"**Platform:** {platform} &nbsp;|&nbsp; **Status:** {status}")
+                    st.divider()
+                    
+        elif response.status_code == 401:
+            st.error("🔒 Unauthorized! Token check failed.")
         else:
-            st.error(f"⚠️ Proxy communication issue: HTTP {res_to.status_code} / {res_from.status_code}")
+            st.error(f"⚠️ Error fetching data from rail proxy: HTTP {response.status_code}")
             
     except Exception as e:
-        st.error(f"❌ Failed to parse data pipeline: {e}")
+        st.error(f"❌ Failed to connect to the network: {e}")
