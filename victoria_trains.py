@@ -59,7 +59,10 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                 for train in train_services:
                     std = train.get('std', 'Unknown')   # Scheduled departure time
                     etd = train.get('etd', '')          # Live status estimate
-                    platform = train.get('platform', '-')
+                    
+                    # Grab platform info and clean it up if it's missing or blank
+                    plat_raw = train.get('platform')
+                    platform = f"Platform {plat_raw}" if (plat_raw and plat_raw.strip()) else "Platform TBC"
                     
                     # Get the final station destination name
                     dest_name = train.get('destination', [{}])[0].get('locationName', 'Victoria')
@@ -72,11 +75,11 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     else:
                         status = f"🟠 Delayed ({etd})"
                     
-                    # Clean mobile typography layout
-                    st.markdown(f"## 🕒 **{std}**")
+                    # High-contrast mobile typography with platform standing out clearly
+                    st.markdown(f"## 🕒 **{std}** &nbsp;&nbsp;&nbsp;&nbsp; 🚪 **{platform}**")
                     if st.session_state.direction == "FROM_LONDON":
                         st.markdown(f"*Final Destination: {dest_name}*")
-                    st.markdown(f"**Platform:** {platform} &nbsp;|&nbsp; **Status:** {status}")
+                    st.markdown(f"**Status:** {status}")
                     st.divider()
                     
         elif response.status_code == 401:
