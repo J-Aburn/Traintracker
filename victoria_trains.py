@@ -21,7 +21,6 @@ if "direction" not in st.session_state:
     st.session_state.direction = "TO_LONDON"
 
 # 3. The Swap Direction Button 🔁
-# When tapped, this toggles the direction and reloads the page instantly
 if st.button("🔁 Swap Direction", use_container_width=True):
     if st.session_state.direction == "TO_LONDON":
         st.session_state.direction = "FROM_LONDON"
@@ -44,11 +43,11 @@ st.write("---")
 
 # 5. Find Trains Button
 if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=True):
-    # Requesting 75 services pulls maximum timetable depth
-    URL = f"https://huxley2.azurewebsites.net/departures/{origin_code}/75?accessToken={ACCESS_TOKEN}&expand=true"
+    # Added 'timeWindow=240' to break the 2-hour server wall and demand a 4-hour schedule grid
+    URL = f"https://huxley2.azurewebsites.net/departures/{origin_code}/75?accessToken={ACCESS_TOKEN}&expand=true&timeWindow=240"
     
     try:
-        with st.spinner("Scanning extended live timetable..."):
+        with st.spinner("Scanning 4-hour live timetable..."):
             response = requests.get(URL)
             
         if response.status_code == 200:
@@ -59,18 +58,14 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
             
             # Filter logic changes depending on direction
             for train in all_services:
-                # Target check (where the train terminates)
                 destination_info = train.get('destination', [{}])[0]
                 dest_crs = destination_info.get('crs', '')
                 dest_name = destination_info.get('locationName', '')
                 
-                # If traveling FROM London, we also check intermediate calling points 
-                # in case the train terminates further down the coast (like Ore or Hastings)
                 is_match = False
                 if dest_crs == filter_crs or filter_name in dest_name:
                     is_match = True
                 elif st.session_state.direction == "FROM_LONDON":
-                    # Scan through the stops along the route
                     subsequent_locations = train.get('subsequentCallingPoints', [{}])
                     if subsequent_locations:
                         calling_points = subsequent_locations[0].get('callingPoint', [])
@@ -82,19 +77,17 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
             
             # Display results
             if not filtered_trains:
-                st.warning(f"⏱️ No matching trains found in the current schedule window.")
+                st.warning(f"⏱️ No matching trains found in the 4-hour schedule window.")
             else:
-                st.success(f"Found {len(filtered_trains)} upcoming services:")
+                st.success(f"Found {len(filtered_trains)} upcoming services over the next 4 hours:")
                 
                 for train in filtered_trains:
                     std = train.get('std', 'Unknown')   # Scheduled departure
                     etd = train.get('etd', '')          # Live estimated status
                     platform = train.get('platform', 'TBC')
                     
-                    # If heading home, dynamically show the destination on the card
                     dest_display = train.get('destination', [{}])[0].get('locationName', 'Victoria')
                     
-                    # Color-coded live status definitions
                     if etd == "On time":
                         status = "🟢 On time"
                     elif etd == "Cancelled":
@@ -102,7 +95,6 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     else:
                         status = f"🟠 Delayed ({etd})"
                     
-                    # High-contrast mobile typography
                     st.markdown(f"## 🕒 **{std}**")
                     if st.session_state.direction == "FROM_LONDON":
                         st.markdown(f"*Heading towards: {dest_display}*")
@@ -110,7 +102,7 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     st.divider()
                     
         elif response.status_code == 401:
-            st.error("🔒 Unauthorized! Make sure your ACCESS_TOKEN is valid.")
+            st.error("🔒 Unauthorized! Token check failed.")
         else:
             st.error(f"⚠️ Error fetching data from rail proxy: HTTP {response.status_code}")
             
