@@ -114,4 +114,10 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                 if count == 0:
                     st.warning(f"⏱️ No trains matching your precise route criteria were found in this time window.")
                     
-        elif response.status_
+        elif response.status_code == 401:
+            st.error("🔒 Unauthorized! Token check failed.")
+        else:
+            st.error(f"⚠️ Error fetching data from rail proxy: HTTP {response.status_code}")
+            
+    except Exception as e:
+        st.error(f"❌ Failed to connect to the network: {e}")
