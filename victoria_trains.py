@@ -50,11 +50,15 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
             train_services = data.get('trainServices', []) or []
             
             if not train_services:
-                st.warning("⏱️ No matching services found in the current timetable grid.")
+                st.warning("⏱️ No matching services found.")
             else:
-                st.write(f"### Next 10 Available Services:")
+                st.write(f"### Available Services:")
                 
+                count = 0
                 for train in train_services:
+                    if count >= 10:  # Cap the display at the next 10 matching trains
+                        break
+                        
                     std = train.get('std', 'Unknown')   # Scheduled departure time
                     etd = train.get('etd', '')          # Live status estimate
                     
@@ -65,6 +69,21 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     # Get the final station destination name
                     dest_name = train.get('destination', [{}])[0].get('locationName', 'Victoria')
                     
+                    # If heading home, verify if this specific train actually stops at your station
+                    if st.session_state.direction == "FROM_LONDON":
+                        subsequent_locations = train.get('subsequentCallingPoints', [{}])
+                        is_matching_stop = False
+                        
+                        if subsequent_locations:
+                            calling_points = subsequent_locations[0].get('callingPoint', [])
+                            if any(cp.get('crs') == sussex_code for cp in calling_points):
+                                is_matching_stop = True
+                        
+                        if not is_matching_stop:
+                            continue # Skip this train if it doesn't stop at Polegate/Berwick
+                    
+                    count += 1
+                    
                     # Color-code the live delays or cancellations
                     if etd == "On time":
                         status = "🟢 On time"
@@ -73,13 +92,16 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     else:
                         status = f"🟠 Delayed ({etd})"
                     
-                    # High-contrast mobile typography with platform standing out clearly
+                    # High-contrast mobile typography with a smaller, cleaner platform layout
                     st.markdown(f"## 🕒 **{std}**")
                     st.markdown(f"🚪 *{platform}*")
                     if st.session_state.direction == "FROM_LONDON":
                         st.markdown(f"*Final Destination: {dest_name}*")
                     st.markdown(f"**Status:** {status}")
                     st.divider()
+                    
+                if count == 0:
+                    st.warning(f"⏱️ No trains leaving Victoria are currently scheduled to stop at {sussex_name} in this time window.")
                     
         elif response.status_code == 401:
             st.error("🔒 Unauthorized! Token check failed.")
