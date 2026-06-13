@@ -29,20 +29,20 @@ st.write("---")
 if st.session_state.direction == "TO_LONDON":
     st.success("## 🌆 Up to London!")
     st.caption(f"Showing upcoming trains from **{sussex_name}** that go to **London Victoria**")
-    # Pulls a healthy pool of departures from your home station to screen
-    URL = f"https://huxley2.azurewebsites.net/departures/{sussex_code}/25?accessToken={ACCESS_TOKEN}&expand=true"
+    # Pull departures from home station (15 is plenty for local lines)
+    URL = f"https://huxley2.azurewebsites.net/departures/{sussex_code}/15?accessToken={ACCESS_TOKEN}&expand=true"
 else:
     st.info(f"## 🏡 Heading Home!")
-    st.caption(f"Showing trains from **London Victoria** that stop at **{sussex_name}**")
-    # Pulls a deeper pool of departures from Victoria so we can scan their stops
-    URL = f"https://huxley2.azurewebsites.net/departures/VIC/25?accessToken={ACCESS_TOKEN}&expand=true"
+    st.caption(f"Showing trains from **London Victoria** stopping at **{sussex_name}**")
+    # CRITICAL: We query 40 rows to check deeper into the schedule window
+    URL = f"https://huxley2.azurewebsites.net/departures/VIC/40?accessToken={ACCESS_TOKEN}&expand=true"
 
 st.write("---")
 
 # Main action button to pull the board
 if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=True):
     try:
-        with st.spinner("Loading live National Rail data..."):
+        with st.spinner("Scanning all platforms and train splits..."):
             response = requests.get(URL)
             
         if response.status_code == 200:
@@ -69,27 +69,36 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     # Get the final station destination name
                     dest_name = train.get('destination', [{}])[0].get('locationName', 'Victoria')
                     
-                    # --- SMART ROUTE FILTERING FOR BOTH DIRECTIONS ---
-                    subsequent_locations = train.get('subsequentCallingPoints', [{}])
+                    # --- SMART ROUTE FILTERING ---
                     is_matching_stop = False
                     
+                    # Check final destination first
+                    destination_info = train.get('destination', [{}])[0]
+                    dest_crs = destination_info.get('crs', '')
+                    
                     if st.session_state.direction == "TO_LONDON":
-                        # Going UP: Make sure the train eventually stops at London Victoria (VIC)
-                        destination_info = train.get('destination', [{}])[0]
-                        if destination_info.get('crs') == "VIC" or "Victoria" in dest_name:
+                        if dest_crs == "VIC" or "Victoria" in dest_name:
                             is_matching_stop = True
-                        elif subsequent_locations:
-                            calling_points = subsequent_locations[0].get('callingPoint', [])
-                            if any(cp.get('crs') == "VIC" for cp in calling_points):
-                                is_matching_stop = True
                     else:
-                        # Heading HOME: Make sure the train stops at your Sussex station (PLG or BRK)
-                        if subsequent_locations:
-                            calling_points = subsequent_locations[0].get('callingPoint', [])
-                            if any(cp.get('crs') == sussex_code for cp in calling_points):
+                        if dest_crs == sussex_code or sussex_name in dest_name:
+                            is_matching_stop = True
+                            
+                    # Deep Route Manifest Check (Splits, Loops, and intermediate stops)
+                    # We check subsequentCallingPoints, but we also check 'subsequentCallingPointsList' 
+                    # because when trains split, Huxley puts calling points into nested lists.
+                    subsequent_lists = train.get('subsequentCallingPoints', []) or []
+                    
+                    for calling_point_group in subsequent_lists:
+                        calling_points = calling_point_group.get('callingPoint', []) or []
+                        for cp in calling_points:
+                            cp_crs = cp.get('crs')
+                            
+                            if st.session_state.direction == "TO_LONDON" and cp_crs == "VIC":
+                                is_matching_stop = True
+                            elif st.session_state.direction == "FROM_LONDON" and cp_crs == sussex_code:
                                 is_matching_stop = True
                     
-                    # Skip the train if it doesn't match our specific destination route criteria
+                    # Skip the train if it doesn't pass through our target stations
                     if not is_matching_stop:
                         continue 
                     
@@ -103,7 +112,7 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     else:
                         status = f"🟠 Delayed ({etd})"
                     
-                    # High-contrast mobile typography with a smaller, cleaner platform layout
+                    # Output Clean Card Layout
                     st.markdown(f"## 🕒 **{std}**")
                     st.markdown(f"🚪 *{platform}*")
                     if st.session_state.direction == "FROM_LONDON":
@@ -112,7 +121,7 @@ if st.button("🚀 Fetch Live Train Board", type="primary", use_container_width=
                     st.divider()
                     
                 if count == 0:
-                    st.warning(f"⏱️ No trains matching your precise route criteria were found in this time window.")
+                    st.warning(f"⏱️ No trains are currently scheduled to stop at your destination in this window.")
                     
         elif response.status_code == 401:
             st.error("🔒 Unauthorized! Token check failed.")
